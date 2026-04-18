@@ -263,6 +263,7 @@ flink-minio-migration/
 │   │   │   ├── config/
 │   │   │   │   ├── FlinkConfig.java           # 【核心】Flink 执行环境配置
 │   │   │   │   ├── MinioProperties.java       # MinIO 连接配置属性
+│   │   │   │   ├── SeaweedFsProperties.java   # SeaweedFS 连接配置属性
 │   │   │   │   └── MinioClientConfig.java     # MinIO 客户端 Bean
 │   │   │   ├── job/
 │   │   │   │   └── WordCountJob.java          # Flink 流处理作业
@@ -331,7 +332,9 @@ checkpointConfig.setCheckpointStorage("s3://flink-checkpoints/flink/checkpoints"
 
 这是迁移验证的核心服务，提供 SeaweedFS → MinIO 的对比验证能力：
 
-- `verifySeaweedFs(path)`：验证原 SeaweedFS 存储（迁移前基准测试）
+- `verifySeaweedFs(path)`：验证 SeaweedFS 挂载路径
+- `verifySeaweedFsFiler(filerUrl, checkpointPath)`：验证 SeaweedFS Filer（HTTP API 模式）
+- `verifySeaweedFsFromConfig()`：使用配置文件验证 SeaweedFS
 - `verifyMinio()`：验证新 MinIO 存储（迁移后验收测试）
 - `compareAndVerify(seaweedFsPath)`：完整迁移对比验证，给出 6 项标准判定
 - `initMinioBucket()`：初始化 MinIO Bucket
@@ -700,7 +703,44 @@ public static class StatefulCounter extends KeyedProcessFunction<String, String,
 
 **目的**：确认迁移前旧存储工作正常，建立基准数据。
 
-**方法一：REST API 验证**
+**SeaweedFS 有三种访问模式**：
+
+| 模式 | 路径格式 | 验证接口 |
+|------|----------|----------|
+| 挂载模式 | `file:///mnt/seaweedfs/...` | `/verify-seaweedfs?path=...` |
+| Filer HTTP API | `http://filer:8888/...` | `/verify-seaweedfs-filer?filerUrl=...` |
+| 配置文件模式 | application.yml 配置 | `/verify-seaweedfs-config` |
+
+**方法一：Filer HTTP API 验证（推荐）**
+
+大多数生产环境使用 Filer HTTP API 模式：
+
+```bash
+# 验证 SeaweedFS Filer（HTTP API 模式）
+curl "http://localhost:8080/api/flink/migration/verify-seaweedfs-filer?filerUrl=http://seaweedfs-dev-filer.geip-xa-dev-gdmp:8888&checkpointPath=/flink/checkpoints"
+```
+
+**方法二：配置文件验证**
+
+在 `application.yml` 中配置 SeaweedFS：
+
+```yaml
+seaweedfs:
+  enabled: true
+  filer-url: http://seaweedfs-dev-filer.geip-xa-dev-gdmp:8888
+  checkpoint-path: /flink/checkpoints
+```
+
+然后调用：
+
+```bash
+# 使用配置文件中的 SeaweedFS 信息验证
+curl http://localhost:8080/api/flink/migration/verify-seaweedfs-config
+```
+
+**方法三：挂载路径验证**
+
+如果 SeaweedFS 已挂载为本地目录：
 
 ```bash
 # 验证 SeaweedFS 挂载路径可访问
@@ -970,7 +1010,9 @@ curl http://localhost:8080/api/flink/checkpoint/list
 
 | API | 方法 | 说明 |
 |-----|------|------|
-| `/api/flink/migration/verify-seaweedfs?path=...` | GET | 验证原 SeaweedFS 存储 |
+| `/api/flink/migration/verify-seaweedfs?path=...` | GET | 验证 SeaweedFS 挂载路径 |
+| `/api/flink/migration/verify-seaweedfs-filer?filerUrl=...&checkpointPath=...` | GET | 验证 SeaweedFS Filer（HTTP API 模式）|
+| `/api/flink/migration/verify-seaweedfs-config` | GET | 使用配置文件验证 SeaweedFS |
 | `/api/flink/migration/verify-minio` | GET | 验证新 MinIO 存储 |
 | `/api/flink/migration/compare?seaweedFsPath=...` | GET | 完整迁移对比验证 |
 | `/api/flink/migration/init-bucket` | POST | 初始化 MinIO Bucket |

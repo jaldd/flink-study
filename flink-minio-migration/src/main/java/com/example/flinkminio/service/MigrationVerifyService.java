@@ -1,6 +1,9 @@
 package com.example.flinkminio.service;
 
 import com.example.flinkminio.config.MinioProperties;
+import com.example.flinkminio.config.SeaweedFsProperties;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.minio.BucketExistsArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
@@ -11,7 +14,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -67,6 +74,11 @@ public class MigrationVerifyService {
 
     @Autowired
     private MinioInitService minioInitService;
+
+    @Autowired(required = false)
+    private SeaweedFsProperties seaweedFsProperties;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * SeaweedFS 存储验证结果
@@ -229,6 +241,125 @@ public class MigrationVerifyService {
         }
 
         return result;
+    }
+
+    /**
+     * 验证 SeaweedFS Filer（HTTP API 模式）
+     *
+     * 通过 HTTP API 访问 SeaweedFS Filer，检查 Checkpoint 文件。
+     * 这是大多数生产环境使用的方式。
+     *
+     * SeaweedFS Filer HTTP API：
+     * - GET http://filer:8888/path?pretty=y - 列出目录内容
+     * - 返回 JSON 格式，包含文件/目录列表
+     *
+     * @param filerUrl Filer 地址，如 http://seaweedfs-filer:8888
+     * @param checkpointPath Checkpoint 路径，如 /flink/checkpoints
+     * @return SeaweedFS 验证结果
+     */
+    public SeaweedFsVerifyResult verifySeaweedFsFiler(String filerUrl, String checkpointPath) {
+        SeaweedFsVerifyResult result = new SeaweedFsVerifyResult();
+
+        String normalizedFilerUrl = filerUrl.endsWith("/") ? filerUrl.substring(0, filerUrl.length() - 1) : filerUrl;
+        String normalizedPath = checkpointPath.startsWith("/") ? checkpointPath : "/" + checkpointPath;
+        result.setPath(normalizedFilerUrl + normalizedPath);
+
+        try {
+            String apiUrl = normalizedFilerUrl + normalizedPath + "?pretty=y";
+
+            URL url = new URL(apiUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                result.setAccessible(false);
+                result.setErrorMessage("SeaweedFS Filer 返回错误: HTTP " + responseCode);
+                return result;
+            }
+
+            result.setAccessible(true);
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                response.append(line);
+            }
+            reader.close();
+
+            JsonNode root = objectMapper.readTree(response.toString());
+
+            int fileCount = 0;
+            long totalSize = 0;
+            boolean hasCheckpoint = false;
+
+            if (root.has("Entries")) {
+                JsonNode entries = root.get("Entries");
+                for (JsonNode entry : entries) {
+                    String name = entry.has("Name") ? entry.get("Name").asText() : "";
+
+                    if (entry.has("chunks")) {
+                        JsonNode chunks = entry.get("chunks");
+                        for (JsonNode chunk : chunks) {
+                            if (chunk.has("size")) {
+                                totalSize += chunk.get("size").asLong();
+                            }
+                        }
+                    } else if (entry.has("FileSize")) {
+                        totalSize += entry.get("FileSize").asLong();
+                    }
+
+                    if (name.startsWith("chk-") || name.equals("_metadata")) {
+                        hasCheckpoint = true;
+                        fileCount++;
+                    }
+
+                    if (entry.has("Extended") && entry.get("Extended").asBoolean()) {
+                        fileCount++;
+                    }
+                }
+            }
+
+            result.setCheckpointExists(hasCheckpoint);
+            result.setCheckpointFileCount(fileCount);
+            result.setTotalCheckpointSize(totalSize);
+
+            log.info("SeaweedFS Filer 验证完成 - URL: {}, 可访问: {}, Checkpoint存在: {}, 文件数: {}",
+                result.getPath(), true, hasCheckpoint, fileCount);
+
+        } catch (Exception e) {
+            result.setAccessible(false);
+            result.setErrorMessage("验证 SeaweedFS Filer 时出错: " + e.getMessage());
+            log.error("验证 SeaweedFS Filer 失败", e);
+        }
+
+        return result;
+    }
+
+    /**
+     * 使用配置文件中的 SeaweedFS 配置验证
+     *
+     * 如果 application.yml 中配置了 seaweedfs.filer-url，则使用配置验证。
+     *
+     * @return SeaweedFS 验证结果，如果未配置则返回 null
+     */
+    public SeaweedFsVerifyResult verifySeaweedFsFromConfig() {
+        if (seaweedFsProperties == null || !seaweedFsProperties.isEnabled()) {
+            return null;
+        }
+
+        String filerUrl = seaweedFsProperties.getFilerUrl();
+        if (filerUrl == null || filerUrl.isEmpty()) {
+            SeaweedFsVerifyResult result = new SeaweedFsVerifyResult();
+            result.setAccessible(false);
+            result.setErrorMessage("SeaweedFS Filer URL 未配置");
+            return result;
+        }
+
+        return verifySeaweedFsFiler(filerUrl, seaweedFsProperties.getCheckpointPath());
     }
 
     /**

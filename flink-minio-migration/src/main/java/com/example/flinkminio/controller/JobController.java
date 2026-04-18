@@ -136,7 +136,102 @@ public class JobController {
 
         Map<String, Object> response = new HashMap<>();
         response.put("storage", "SeaweedFS");
+        response.put("mode", "mount");
         response.put("path", result.getPath());
+        response.put("accessible", result.isAccessible());
+        response.put("checkpointExists", result.isCheckpointExists());
+        response.put("checkpointFileCount", result.getCheckpointFileCount());
+        response.put("totalCheckpointSize", result.getTotalCheckpointSize());
+        response.put("totalCheckpointSizeHuman", formatSize(result.getTotalCheckpointSize()));
+        if (result.getErrorMessage() != null) {
+            response.put("errorMessage", result.getErrorMessage());
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 验证 SeaweedFS Filer（HTTP API 模式）
+     *
+     * GET /api/flink/migration/verify-seaweedfs-filer?filerUrl=http://filer:8888&checkpointPath=/flink/checkpoints
+     *
+     * 通过 HTTP API 访问 SeaweedFS Filer，检查 Checkpoint 文件。
+     * 这是大多数生产环境使用的方式。
+     *
+     * 【使用场景】
+     * 当 SeaweedFS 不是挂载模式，而是通过 Filer HTTP API 访问时，
+     * 使用此接口验证。需要提供 Filer 地址和 Checkpoint 路径。
+     *
+     * 【参数说明】
+     * - filerUrl: SeaweedFS Filer 的 HTTP API 地址
+     *   示例：http://seaweedfs-dev-filer.geip-xa-dev-gdmp:8888
+     * - checkpointPath: Checkpoint 在 SeaweedFS 中的存储路径
+     *   示例：/flink/checkpoints
+     *
+     * @param filerUrl Filer 地址
+     * @param checkpointPath Checkpoint 路径
+     * @return SeaweedFS 验证结果
+     */
+    @GetMapping("/migration/verify-seaweedfs-filer")
+    public ResponseEntity<Map<String, Object>> verifySeaweedFsFiler(
+            @RequestParam String filerUrl,
+            @RequestParam(defaultValue = "/flink/checkpoints") String checkpointPath) {
+
+        MigrationVerifyService.SeaweedFsVerifyResult result =
+            migrationVerifyService.verifySeaweedFsFiler(filerUrl, checkpointPath);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("storage", "SeaweedFS");
+        response.put("mode", "filer-http-api");
+        response.put("filerUrl", filerUrl);
+        response.put("checkpointPath", checkpointPath);
+        response.put("fullUrl", result.getPath());
+        response.put("accessible", result.isAccessible());
+        response.put("checkpointExists", result.isCheckpointExists());
+        response.put("checkpointFileCount", result.getCheckpointFileCount());
+        response.put("totalCheckpointSize", result.getTotalCheckpointSize());
+        response.put("totalCheckpointSizeHuman", formatSize(result.getTotalCheckpointSize()));
+        if (result.getErrorMessage() != null) {
+            response.put("errorMessage", result.getErrorMessage());
+        }
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * 使用配置文件验证 SeaweedFS
+     *
+     * GET /api/flink/migration/verify-seaweedfs-config
+     *
+     * 使用 application.yml 中配置的 SeaweedFS 信息进行验证。
+     * 需要先在配置文件中设置：
+     * seaweedfs:
+     *   enabled: true
+     *   filer-url: http://seaweedfs-filer:8888
+     *   checkpoint-path: /flink/checkpoints
+     *
+     * @return SeaweedFS 验证结果
+     */
+    @GetMapping("/migration/verify-seaweedfs-config")
+    public ResponseEntity<Map<String, Object>> verifySeaweedFsFromConfig() {
+        MigrationVerifyService.SeaweedFsVerifyResult result =
+            migrationVerifyService.verifySeaweedFsFromConfig();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("storage", "SeaweedFS");
+        response.put("mode", "config-based");
+
+        if (result == null) {
+            response.put("accessible", false);
+            response.put("errorMessage",
+                "SeaweedFS 未配置或未启用。请在 application.yml 中设置:\n" +
+                "seaweedfs:\n" +
+                "  enabled: true\n" +
+                "  filer-url: http://your-filer:8888\n" +
+                "  checkpoint-path: /flink/checkpoints");
+            return ResponseEntity.ok(response);
+        }
+
         response.put("accessible", result.isAccessible());
         response.put("checkpointExists", result.isCheckpointExists());
         response.put("checkpointFileCount", result.getCheckpointFileCount());

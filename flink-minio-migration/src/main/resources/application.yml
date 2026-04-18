@@ -8,21 +8,41 @@
 # 2. minio.access-key / minio.secret-key: 改为 MinIO 的密钥
 # 3. Flink Checkpoint 路径协议从 file:// 或 hdfs:// 改为 s3://
 #
-# 【SeaweedFS 配置参考】（迁移前）
-# seaweedfs:
-#   filer-host: seaweedfs-filer
-#   filer-port: 8888
-#   mount-path: /mnt/seaweedfs
-#   checkpoint-path: file:///mnt/seaweedfs/flink/checkpoints
-#
-# 【MinIO 配置】（迁移后）
-# 使用 S3 协议，配置更简洁
 
 server:
   port: 8080
 
 # =====================================================
-# MinIO 配置
+# SeaweedFS 配置（迁移前验证用）
+# =====================================================
+# 如果你有 SeaweedFS 环境，配置以下信息用于迁移前验证。
+# 如果没有 SeaweedFS 环境，将 enabled 设为 false 或删除此配置。
+#
+# SeaweedFS 有三种访问模式：
+# 1. 挂载模式：Filer 挂载为本地目录，使用 file:// 协议
+# 2. Filer HTTP API 模式：通过 HTTP API 访问（本配置支持）
+# 3. S3 Gateway 模式：通过 S3 协议访问
+#
+seaweedfs:
+  # 是否启用 SeaweedFS 验证
+  # 如果没有 SeaweedFS 环境，设为 false
+  enabled: false
+
+  # SeaweedFS Filer HTTP API 地址
+  # 示例：http://seaweedfs-dev-filer.geip-xa-dev-gdmp:8888
+  filer-url: http://localhost:8888
+
+  # Checkpoint 在 SeaweedFS 中的存储路径
+  checkpoint-path: /flink/checkpoints
+
+  # 连接超时（毫秒）
+  connect-timeout: 5000
+
+  # 读取超时（毫秒）
+  read-timeout: 10000
+
+# =====================================================
+# MinIO 配置（迁移后使用）
 # =====================================================
 minio:
   # MinIO 服务地址（S3 endpoint）
