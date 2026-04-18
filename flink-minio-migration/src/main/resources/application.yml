@@ -1,0 +1,77 @@
+# =====================================================
+# Flink MinIO 迁移项目配置文件
+# =====================================================
+#
+# 本配置文件包含 MinIO 连接信息和 Flink 相关配置。
+# 从 SeaweedFS 迁移到 MinIO 时，主要修改以下配置：
+# 1. minio.endpoint: 从 SeaweedFS 地址改为 MinIO 地址
+# 2. minio.access-key / minio.secret-key: 改为 MinIO 的密钥
+# 3. Flink Checkpoint 路径协议从 file:// 或 hdfs:// 改为 s3://
+#
+# 【SeaweedFS 配置参考】（迁移前）
+# seaweedfs:
+#   filer-host: seaweedfs-filer
+#   filer-port: 8888
+#   mount-path: /mnt/seaweedfs
+#   checkpoint-path: file:///mnt/seaweedfs/flink/checkpoints
+#
+# 【MinIO 配置】（迁移后）
+# 使用 S3 协议，配置更简洁
+
+server:
+  port: 8080
+
+# =====================================================
+# MinIO 配置
+# =====================================================
+minio:
+  # MinIO 服务地址（S3 endpoint）
+  # 本地开发环境使用 localhost:9000
+  # 生产环境改为实际的 MinIO 服务地址
+  endpoint: http://localhost:9000
+
+  # 访问密钥
+  # MinIO 默认为 minioadmin / minioadmin
+  # 生产环境请使用强密码
+  access-key: minioadmin
+  secret-key: minioadmin
+
+  # 存储 Checkpoint 的 Bucket 名称
+  bucket: flink-checkpoints
+
+  # Checkpoint 在 Bucket 中的路径前缀
+  checkpoint-path: flink/checkpoints
+
+# =====================================================
+# Flink 配置
+# =====================================================
+flink:
+  # Checkpoint 间隔（毫秒）
+  checkpoint-interval: 30000
+
+  # Checkpoint 模式：EXACTLY_ONCE 或 AT_LEAST_ONCE
+  checkpoint-mode: EXACTLY_ONCE
+
+  # Checkpoint 超时时间（毫秒）
+  checkpoint-timeout: 600000
+
+  # 最小 Checkpoint 间隔（毫秒）
+  min-pause-between-checkpoints: 500
+
+  # 最大并发 Checkpoint 数
+  max-concurrent-checkpoints: 1
+
+  # 状态后端类型：rocksdb 或 hashmap
+  state-backend: rocksdb
+
+  # 是否启用增量 Checkpoint（仅 RocksDB 支持）
+  incremental-checkpoint: true
+
+# =====================================================
+# 日志配置
+# =====================================================
+logging:
+  level:
+    root: INFO
+    com.example.flinkminio: DEBUG
+    org.apache.flink: INFO

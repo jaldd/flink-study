@@ -1,0 +1,26 @@
+# 测试配置文件
+# 使用随机端口，避免与本地服务冲突
+
+server:
+  port: 0
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket: flink-checkpoints-test
+  checkpoint-path: flink/checkpoints
+
+flink:
+  checkpoint-interval: 5000
+  checkpoint-mode: EXACTLY_ONCE
+  checkpoint-timeout: 60000
+  min-pause-between-checkpoints: 200
+  max-concurrent-checkpoints: 1
+  state-backend: rocksdb
+  incremental-checkpoint: true
+
+logging:
+  level:
+    root: WARN
+    com.example.flinkminio: DEBUG
