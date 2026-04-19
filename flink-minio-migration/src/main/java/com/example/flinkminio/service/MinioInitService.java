@@ -1,14 +1,14 @@
 package com.example.flinkminio.service;
 
 import com.example.flinkminio.config.MinioProperties;
-import com.example.flinkminio.job.WordCountJob;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
@@ -32,11 +32,23 @@ public class MinioInitService {
 
     private static final Logger log = LoggerFactory.getLogger(MinioInitService.class);
 
-    @Autowired
-    private MinioProperties minioProperties;
+    private final MinioProperties minioProperties;
+    private final MinioClient minioClient;
 
-    @Autowired
-    private MinioClient minioClient;
+    public MinioInitService(MinioProperties minioProperties, MinioClient minioClient) {
+        this.minioProperties = minioProperties;
+        this.minioClient = minioClient;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        try {
+            ensureBucketExists();
+            log.info("MinIO 连接验证通过，Bucket 已就绪");
+        } catch (Exception e) {
+            log.warn("MinIO 连接验证失败，应用已启动但 MinIO 可能不可用: {}", e.getMessage());
+        }
+    }
 
     /**
      * 初始化 MinIO Bucket

@@ -10,6 +10,7 @@ minio:
   secret-key: minioadmin
   bucket: flink-checkpoints-test
   checkpoint-path: flink/checkpoints
+  s3-path-style-access: true
 
 flink:
   checkpoint-interval: 5000

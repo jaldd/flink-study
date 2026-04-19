@@ -66,17 +66,19 @@ public class MigrationVerifyService {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationVerifyService.class);
 
-    @Autowired
-    private MinioClient minioClient;
+    private final MinioClient minioClient;
+    private final MinioProperties minioProperties;
+    private final MinioInitService minioInitService;
+    private final SeaweedFsProperties seaweedFsProperties;
 
-    @Autowired
-    private MinioProperties minioProperties;
-
-    @Autowired
-    private MinioInitService minioInitService;
-
-    @Autowired(required = false)
-    private SeaweedFsProperties seaweedFsProperties;
+    public MigrationVerifyService(MinioClient minioClient, MinioProperties minioProperties,
+                                  MinioInitService minioInitService,
+                                  @Autowired(required = false) SeaweedFsProperties seaweedFsProperties) {
+        this.minioClient = minioClient;
+        this.minioProperties = minioProperties;
+        this.minioInitService = minioInitService;
+        this.seaweedFsProperties = seaweedFsProperties;
+    }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 

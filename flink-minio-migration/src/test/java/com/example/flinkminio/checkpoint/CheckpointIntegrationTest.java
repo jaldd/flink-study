@@ -135,21 +135,17 @@ class CheckpointIntegrationTest extends MinioTestContainer {
      *   + 配置 S3 访问密钥
      */
     private StreamExecutionEnvironment createEnvironmentWithMinioCheckpoint() {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
-        // 配置 RocksDB 状态后端（支持增量 Checkpoint）
-        EmbeddedRocksDBStateBackend stateBackend = new EmbeddedRocksDBStateBackend(true);
-        env.setStateBackend(stateBackend);
-
-        // 配置 S3 文件系统连接 MinIO
         Configuration flinkConfig = new Configuration();
         flinkConfig.setString("s3.endpoint", getMinioEndpoint());
         flinkConfig.setString("s3.access-key", ACCESS_KEY);
         flinkConfig.setString("s3.secret-key", SECRET_KEY);
         flinkConfig.setString("s3.path.style.access", "true");
-        env.getConfig().setGlobalJobParameters(flinkConfig);
 
-        // 开启 Checkpoint
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
+
+        EmbeddedRocksDBStateBackend stateBackend = new EmbeddedRocksDBStateBackend(true);
+        env.setStateBackend(stateBackend);
+
         env.enableCheckpointing(1000);
 
         CheckpointConfig checkpointConfig = env.getCheckpointConfig();
@@ -158,16 +154,13 @@ class CheckpointIntegrationTest extends MinioTestContainer {
         checkpointConfig.setMinPauseBetweenCheckpoints(500);
         checkpointConfig.setMaxConcurrentCheckpoints(1);
 
-        // 【关键迁移点】设置 Checkpoint 存储路径为 MinIO S3 路径
         String checkpointPath = "s3://" + CHECKPOINT_BUCKET + "/flink/checkpoints";
         checkpointConfig.setCheckpointStorage(checkpointPath);
 
-        // 保留 Checkpoint 数据（即使作业取消）
         checkpointConfig.setExternalizedCheckpointCleanup(
             CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION
         );
 
-        // 配置重启策略
         env.setRestartStrategy(
             RestartStrategies.fixedDelayRestart(3, Time.of(1, TimeUnit.SECONDS))
         );

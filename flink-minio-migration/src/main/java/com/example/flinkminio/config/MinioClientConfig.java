@@ -1,6 +1,5 @@
 package com.example.flinkminio.config;
 
-import com.example.flinkminio.config.MinioProperties;
 import io.minio.MinioClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

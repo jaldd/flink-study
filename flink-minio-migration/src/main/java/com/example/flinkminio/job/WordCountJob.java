@@ -50,24 +50,12 @@ public class WordCountJob {
      *
      * @param env Flink 流执行环境（已配置好 Checkpoint 到 MinIO）
      */
-    public static void execute(StreamExecutionEnvironment env) throws Exception {
-        execute(env, null);
-    }
-
-    /**
-     * 执行 WordCount 流处理作业（指定输入文件路径）
-     *
-     * @param env          Flink 流执行环境
-     * @param inputFilePath 输入文件路径，如果为 null 则使用内置数据源
-     */
-    public static void execute(StreamExecutionEnvironment env, String inputFilePath) throws Exception {
-        log.info("开始执行 WordCount 作业，输入路径: {}", inputFilePath);
+    public static void buildPipeline(StreamExecutionEnvironment env, String inputFilePath) {
+        log.info("构建 WordCount 作业流水线，输入路径: {}", inputFilePath);
 
         DataStream<String> textStream;
 
         if (inputFilePath != null && !inputFilePath.isEmpty()) {
-            // 从文件读取文本
-            // 支持 s3://、file://、hdfs:// 等协议
             FileSource<String> fileSource = FileSource
                 .forRecordStreamFormat(
                     new TextLineInputFormat(),
@@ -81,8 +69,6 @@ public class WordCountJob {
                 "file-source"
             );
         } else {
-            // 使用内置数据源（方便演示和测试）
-            // 在实际生产中，通常从 Kafka、Socket 或文件读取
             textStream = env.fromElements(
                 "hello world flink minio",
                 "flink checkpoint minio s3",
@@ -95,25 +81,23 @@ public class WordCountJob {
             );
         }
 
-        // =====================================================
-        // 数据处理流水线
-        // =====================================================
-
-        // 第一步：将每行文本拆分为 (单词, 1) 的元组
         DataStream<Tuple2<String, Integer>> wordPairs = textStream
             .flatMap(new Tokenizer());
 
-        // 第二步：按单词分组，使用滚动窗口（每 5 秒一个窗口）
-        // 在窗口内对计数求和
         DataStream<Tuple2<String, Integer>> wordCounts = wordPairs
             .keyBy(tuple -> tuple.f0)
             .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
             .reduce(new WordCountReducer());
 
-        // 第三步：打印结果到控制台
         wordCounts.print("WordCount-Result");
+    }
 
-        // 执行作业
+    public static void execute(StreamExecutionEnvironment env) throws Exception {
+        execute(env, null);
+    }
+
+    public static void execute(StreamExecutionEnvironment env, String inputFilePath) throws Exception {
+        buildPipeline(env, inputFilePath);
         env.execute(JOB_NAME);
     }
 

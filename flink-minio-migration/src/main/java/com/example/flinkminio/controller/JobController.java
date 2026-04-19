@@ -1,10 +1,12 @@
 package com.example.flinkminio.controller;
 
 import com.example.flinkminio.config.MinioProperties;
+import com.example.flinkminio.job.WordCountJob;
 import com.example.flinkminio.model.JobSubmissionResult;
 import com.example.flinkminio.service.CheckpointService;
 import com.example.flinkminio.service.MigrationVerifyService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,14 +29,19 @@ import java.util.Map;
 @RequestMapping("/api/flink")
 public class JobController {
 
-    @Autowired
-    private CheckpointService checkpointService;
+    private static final Logger log = LoggerFactory.getLogger(JobController.class);
 
-    @Autowired
-    private MinioProperties minioProperties;
+    private final CheckpointService checkpointService;
+    private final MinioProperties minioProperties;
+    private final MigrationVerifyService migrationVerifyService;
 
-    @Autowired
-    private MigrationVerifyService migrationVerifyService;
+    public JobController(CheckpointService checkpointService,
+                         MinioProperties minioProperties,
+                         MigrationVerifyService migrationVerifyService) {
+        this.checkpointService = checkpointService;
+        this.minioProperties = minioProperties;
+        this.migrationVerifyService = migrationVerifyService;
+    }
 
     /**
      * 提交 WordCount 作业
@@ -49,12 +56,13 @@ public class JobController {
     public ResponseEntity<JobSubmissionResult> submitJob(
             @RequestParam(required = false) String inputFilePath) {
         try {
-            String jobName = checkpointService.submitWordCountJob(inputFilePath);
+            String jobId = checkpointService.submitWordCountJob(inputFilePath);
             JobSubmissionResult result = JobSubmissionResult.success(
-                jobName, minioProperties.getFullCheckpointPath()
+                jobId, WordCountJob.JOB_NAME, minioProperties.getFullCheckpointPath()
             );
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            log.error("提交作业失败", e);
             JobSubmissionResult result = JobSubmissionResult.failure(e.getMessage());
             return ResponseEntity.internalServerError().body(result);
         }

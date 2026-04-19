@@ -114,17 +114,16 @@ class StateRecoveryTest extends MinioTestContainer {
      * 创建配置了 MinIO Checkpoint 的执行环境
      */
     private StreamExecutionEnvironment createEnvironmentWithMinioCheckpoint() {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-
-        EmbeddedRocksDBStateBackend stateBackend = new EmbeddedRocksDBStateBackend(true);
-        env.setStateBackend(stateBackend);
-
         Configuration flinkConfig = new Configuration();
         flinkConfig.setString("s3.endpoint", getMinioEndpoint());
         flinkConfig.setString("s3.access-key", ACCESS_KEY);
         flinkConfig.setString("s3.secret-key", SECRET_KEY);
         flinkConfig.setString("s3.path.style.access", "true");
-        env.getConfig().setGlobalJobParameters(flinkConfig);
+
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
+
+        EmbeddedRocksDBStateBackend stateBackend = new EmbeddedRocksDBStateBackend(true);
+        env.setStateBackend(stateBackend);
 
         env.enableCheckpointing(1000);
 

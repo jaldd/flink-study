@@ -56,6 +56,8 @@ public class MinioProperties {
      */
     private String checkpointPath = "flink/checkpoints";
 
+    private boolean s3PathStyleAccess = true;
+
     public String getEndpoint() {
         return endpoint;
     }
@@ -94,6 +96,14 @@ public class MinioProperties {
 
     public void setCheckpointPath(String checkpointPath) {
         this.checkpointPath = checkpointPath;
+    }
+
+    public boolean isS3PathStyleAccess() {
+        return s3PathStyleAccess;
+    }
+
+    public void setS3PathStyleAccess(boolean s3PathStyleAccess) {
+        this.s3PathStyleAccess = s3PathStyleAccess;
     }
 
     /**

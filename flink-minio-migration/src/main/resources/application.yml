@@ -62,6 +62,9 @@ minio:
   # Checkpoint 在 Bucket 中的路径前缀
   checkpoint-path: flink/checkpoints
 
+  # S3 Path-Style Access（MinIO 需要设为 true，AWS S3 设为 false）
+  s3-path-style-access: true
+
 # =====================================================
 # Flink 配置
 # =====================================================
@@ -95,3 +98,15 @@ logging:
     root: INFO
     com.example.flinkminio: DEBUG
     org.apache.flink: INFO
+
+# =====================================================
+# Actuator 配置
+# =====================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
